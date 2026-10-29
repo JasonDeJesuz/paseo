@@ -151,6 +151,37 @@ test.describe("Plugin sidebar items", () => {
     await cleanup();
   });
 
+  test("a plugin screen header toggles the sidebar on tablets and desktop", async ({ page }) => {
+    await page.setViewportSize({ width: 820, height: 1180 });
+    await gotoWorkspace(page, workspaceId);
+    const row = headerRow(page, SHOWCASE_PLUGIN_ID, "deploys");
+    await expect(row).toBeVisible({ timeout: 30_000 });
+    await row.click();
+    await expect(screenTitle(page)).toHaveText("Deploys");
+
+    for (const viewport of [{ width: 820, height: 1180 }, { width: 1180, height: 820 }, WIDE]) {
+      await page.setViewportSize(viewport);
+      const toggle = visibleTestId(page, "menu-button");
+      await expect(toggle).toHaveAttribute("aria-expanded", "true");
+      const toggleBox = await boxOf(toggle);
+      const titleBox = await boxOf(screenTitle(page));
+      expect(toggleBox.x + toggleBox.width).toBeLessThanOrEqual(titleBox.x);
+      await toggle.click();
+      await expect(row).not.toBeVisible();
+      await expect(toggle).toHaveAttribute("aria-expanded", "false");
+      await expect(screenTitle(page)).toHaveText("Deploys");
+      await expect(page.getByTestId("plugin-surface-close")).toBeVisible();
+      await qaScreenshot(page, `plugin-screen-sidebar-closed-${viewport.width}`);
+      await toggle.click();
+      await expect(row).toBeVisible();
+      await expect(toggle).toHaveAttribute("aria-expanded", "true");
+      await qaScreenshot(page, `plugin-screen-sidebar-open-${viewport.width}`);
+    }
+
+    await closeScreen(page);
+    await expect(screenTitle(page)).toHaveCount(0);
+  });
+
   test("a plugin's screen, header row, footer popover and command work together", async ({
     page,
   }) => {
