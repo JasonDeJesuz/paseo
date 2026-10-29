@@ -255,7 +255,7 @@ it("includes transitive tool updates in a contiguous projected tail", () => {
 
 async function measureTimelineTail(wholeTurns: boolean) {
   const fixture = fileURLToPath(
-    new URL("./test-fixtures/timeline-responsiveness.ts", import.meta.url),
+    new URL("./test-utils/timeline-responsiveness.ts", import.meta.url),
   );
   const { stdout, stderr } = await promisify(execFile)(
     process.execPath,
@@ -270,26 +270,29 @@ async function measureTimelineTail(wholeTurns: boolean) {
 }
 
 it("excludes unrelated test-runner CPU from the timeline fetch budget", async () => {
-  const unrelatedWork = new Promise<void>((resolve) => {
-    setImmediate(() => {
-      const threadCpuUsage: (previous?: NodeJS.CpuUsage) => NodeJS.CpuUsage = Reflect.get(
-        process,
-        "threadCpuUsage",
-      );
-      const start = threadCpuUsage();
-      let elapsed: NodeJS.CpuUsage;
-      do {
-        elapsed = threadCpuUsage(start);
-      } while (elapsed.user + elapsed.system < 80_000);
-      resolve();
-    });
-  });
-  const { result: tail, blockingMs } = await measureTimelineTail(false);
-  await unrelatedWork;
-  expect(tail.rows).toHaveLength(200);
-  expect(tail.startSeq).toBe(99_801);
-  expect(tail.endSeq).toBe(100_000);
-  expect(blockingMs).toBeLessThan(50);
+  let unrelatedWork: ReturnType<typeof setImmediate>;
+  const burnCpu = () => {
+    const threadCpuUsage: (previous?: NodeJS.CpuUsage) => NodeJS.CpuUsage = Reflect.get(
+      process,
+      "threadCpuUsage",
+    );
+    const start = threadCpuUsage();
+    let elapsed: NodeJS.CpuUsage;
+    do {
+      elapsed = threadCpuUsage(start);
+    } while (elapsed.user + elapsed.system < 80_000);
+    unrelatedWork = setImmediate(burnCpu);
+  };
+  unrelatedWork = setImmediate(burnCpu);
+  try {
+    const { result: tail, blockingMs } = await measureTimelineTail(false);
+    expect(tail.rows).toHaveLength(200);
+    expect(tail.startSeq).toBe(99_801);
+    expect(tail.endSeq).toBe(100_000);
+    expect(blockingMs).toBeLessThan(50);
+  } finally {
+    clearImmediate(unrelatedWork);
+  }
 });
 
 it.each([false, true])(
