@@ -74,7 +74,8 @@ async function electronRegression() {
   const { setTimeout: delay } = require("node:timers/promises");
   app.setPath("userData", paths.join(__dirname, "profile"));
   app.on("window-all-closed", () => {});
-  const artifactDir = process.argv[2];
+  // Electron keeps Linux's --no-sandbox in argv; the artifact directory is always last.
+  const artifactDir = process.argv.at(-1);
   let window;
   const observations = [];
   const colors = {
